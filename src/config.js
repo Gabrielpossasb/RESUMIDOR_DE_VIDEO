@@ -36,5 +36,14 @@ export const config = {
     },
   },
 
+  estimate: {
+    // fração do tamanho de entrada que se espera como saída de cada chamada
+    // do MAP (extração ainda é bem detalhada, não comprime tanto)
+    mapOutputRatio: envFloat("ESTIMATE_MAP_OUTPUT_RATIO", 0.3),
+    // fração do total de resumos do MAP que se espera como saída do REDUCE
+    // (consolidação por tema comprime mais)
+    reduceOutputRatio: envFloat("ESTIMATE_REDUCE_OUTPUT_RATIO", 0.5),
+  },
+
   outputDir: "output",
 };
