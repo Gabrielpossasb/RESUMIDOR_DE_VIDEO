@@ -2,16 +2,9 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import youtubedl from "youtube-dl-exec";
 import { config } from "../config.js";
+import { buildVideoDirName, resolveVideoDir } from "../outputPaths.js";
 
 const PREFERRED_LANGUAGES = ["pt", "pt-BR", "pt-PT", "en", "en-US", "en-GB"];
-
-function transcriptDir(videoId) {
-  return path.join(config.outputDir, videoId);
-}
-
-function transcriptPath(videoId) {
-  return path.join(transcriptDir(videoId), "transcript-raw.txt");
-}
 
 async function readCachedSegments(filePath) {
   try {
@@ -51,8 +44,9 @@ function pickLanguage(availableLangs) {
   return availableLangs[0] ?? null;
 }
 
-async function pickCaptionSource(videoId) {
-  const info = await youtubedl(`https://www.youtube.com/watch?v=${videoId}`, {
+async function fetchVideoInfo(videoId) {
+  const url = `https://www.youtube.com/watch?v=${videoId}`;
+  const info = await youtubedl(url, {
     dumpSingleJson: true,
     skipDownload: true,
     noWarnings: true,
@@ -62,54 +56,73 @@ async function pickCaptionSource(videoId) {
   const autoLangs = Object.keys(info.automatic_captions ?? {});
 
   const manualLang = pickLanguage(manualLangs);
-  if (manualLang) return { lang: manualLang, auto: false };
-
   const autoLang = pickLanguage(autoLangs);
-  if (autoLang) return { lang: autoLang, auto: true };
 
-  return null;
+  const source = manualLang
+    ? { lang: manualLang, auto: false }
+    : autoLang
+      ? { lang: autoLang, auto: true }
+      : null;
+
+  return {
+    source,
+    title: info.title ?? videoId,
+    url: info.webpage_url ?? url,
+  };
 }
 
 export async function readCachedTranscript(videoId) {
-  const cached = await readCachedSegments(transcriptPath(videoId));
+  const dir =
+    (await resolveVideoDir(videoId, config)) ??
+    path.join(config.outputDir, videoId);
+  const filePath = path.join(dir, "transcript-raw.txt");
+
+  const cached = await readCachedSegments(filePath);
   if (!cached) {
     throw new Error(
-      `--skip-fetch foi usado mas não há transcrição em cache para "${videoId}" (${transcriptPath(videoId)}).`
+      `--skip-fetch foi usado mas não há transcrição em cache para "${videoId}" (${filePath}).`
     );
   }
   return cached;
 }
 
 export async function fetchTranscript(videoId) {
-  const filePath = transcriptPath(videoId);
-  const dir = transcriptDir(videoId);
+  const existingDir = await resolveVideoDir(videoId, config);
 
-  const cached = await readCachedSegments(filePath);
-  if (cached) return cached;
+  if (existingDir) {
+    const cached = await readCachedSegments(
+      path.join(existingDir, "transcript-raw.txt")
+    );
+    if (cached) return cached;
+  }
 
-  let source;
+  let info;
   try {
-    source = await pickCaptionSource(videoId);
+    info = await fetchVideoInfo(videoId);
   } catch (err) {
     throw new Error(
       `Não foi possível carregar o vídeo "${videoId}": ${err.message}`
     );
   }
 
-  if (!source) {
+  if (!info.source) {
     throw new Error(
       `O vídeo "${videoId}" não possui transcrição/legendas disponíveis.`
     );
   }
 
+  const dirName = existingDir
+    ? path.basename(existingDir)
+    : buildVideoDirName(videoId, info.title);
+  const dir = path.join(config.outputDir, dirName);
   await mkdir(dir, { recursive: true });
 
   try {
-    await youtubedl(`https://www.youtube.com/watch?v=${videoId}`, {
+    await youtubedl(info.url, {
       skipDownload: true,
-      writeSub: !source.auto,
-      writeAutoSub: source.auto,
-      subLangs: source.lang,
+      writeSub: !info.source.auto,
+      writeAutoSub: info.source.auto,
+      subLangs: info.source.lang,
       subFormat: "json3",
       output: path.join(dir, "%(id)s.%(ext)s"),
       noWarnings: true,
@@ -120,7 +133,7 @@ export async function fetchTranscript(videoId) {
     );
   }
 
-  const subtitlePath = path.join(dir, `${videoId}.${source.lang}.json3`);
+  const subtitlePath = path.join(dir, `${videoId}.${info.source.lang}.json3`);
   const body = await readFile(subtitlePath, "utf8");
   const segments = parseJson3Captions(body);
   await rm(subtitlePath, { force: true });
@@ -131,7 +144,16 @@ export async function fetchTranscript(videoId) {
     );
   }
 
-  await writeFile(filePath, JSON.stringify(segments, null, 2), "utf8");
+  await writeFile(
+    path.join(dir, "transcript-raw.txt"),
+    JSON.stringify(segments, null, 2),
+    "utf8"
+  );
+  await writeFile(
+    path.join(dir, "meta.json"),
+    JSON.stringify({ videoId, title: info.title, url: info.url }, null, 2),
+    "utf8"
+  );
 
   return segments;
 }

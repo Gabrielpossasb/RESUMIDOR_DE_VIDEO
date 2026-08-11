@@ -22,6 +22,12 @@ async function writeChunk(outputDir, videoId, index, summary) {
   );
 }
 
+async function writeMeta(outputDir, videoId, meta) {
+  const dir = path.join(outputDir, videoId);
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, "meta.json"), JSON.stringify(meta, null, 2), "utf8");
+}
+
 function fakeClient(markdown) {
   const calls = [];
   return {
@@ -56,10 +62,31 @@ test("consolida os resumos relevantes numa única chamada, ignorando SEM CONTEÚ
   assert.match(calls[0].messages[1].content, /bloco 2/);
   assert.doesNotMatch(calls[0].messages[1].content, /SEM CONTEÚDO RELEVANTE/);
 
-  assert.equal(markdown, "# Resumo final\n\nconteúdo consolidado");
+  // sem meta.json, o cabeçalho cai pro videoId
+  assert.equal(markdown, "# video1\n\n# Resumo final\n\nconteúdo consolidado");
 
   const saved = await readFile(path.join(outputDir, "video1", "resumo-final.md"), "utf8");
   assert.equal(saved, markdown);
+});
+
+test("usa o título e o link do meta.json como cabeçalho, quando existem", async (t) => {
+  const outputDir = await makeTempOutputDir(t);
+  const cfg = { outputDir, reduceModel: "modelo-forte-fake" };
+  const { client } = fakeClient("## Teses principais\n\nconteúdo");
+
+  await writeChunk(outputDir, "video1", 0, "resumo relevante (00:00:00)");
+  await writeMeta(outputDir, "video1", {
+    videoId: "video1",
+    title: "Título Real do Vídeo",
+    url: "https://www.youtube.com/watch?v=video1",
+  });
+
+  const markdown = await consolidate("video1", cfg, client);
+
+  assert.equal(
+    markdown,
+    "# Título Real do Vídeo\n\n[Assistir no YouTube](https://www.youtube.com/watch?v=video1)\n\n## Teses principais\n\nconteúdo"
+  );
 });
 
 test("reconhece variações de SEM CONTEÚDO RELEVANTE (minúsculas, com pontuação)", async (t) => {

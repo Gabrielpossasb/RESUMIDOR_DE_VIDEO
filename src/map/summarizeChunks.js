@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import pLimit from "p-limit";
+import { videoDirOrFallback } from "../outputPaths.js";
 
 const MAP_SYSTEM_PROMPT = `Este é um trecho de um podcast técnico. Extraia:
 1. As teses/argumentos defendidos (o que a pessoa DEFENDE, não só o que foi dito)
@@ -20,8 +21,9 @@ terminar com o timestamp entre parênteses, neste formato:
 
 Nunca escreva um item sem o timestamp entre parênteses no final.`;
 
-function chunksDir(videoId, cfg) {
-  return path.join(cfg.outputDir, videoId, "chunks");
+async function chunksDir(videoId, cfg) {
+  const dir = await videoDirOrFallback(videoId, cfg);
+  return path.join(dir, "chunks");
 }
 
 function chunkFilePath(dir, index) {
@@ -71,7 +73,7 @@ async function summarizeOneChunk(chunk, index, dir, cfg, client) {
 }
 
 export async function summarizeChunks(chunks, videoId, cfg, client) {
-  const dir = chunksDir(videoId, cfg);
+  const dir = await chunksDir(videoId, cfg);
   await mkdir(dir, { recursive: true });
 
   const limit = pLimit(cfg.mapConcurrency);

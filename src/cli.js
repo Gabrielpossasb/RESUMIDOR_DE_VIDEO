@@ -1,4 +1,5 @@
 import { createInterface } from "node:readline/promises";
+import path from "node:path";
 import { config } from "./config.js";
 import { createOpenAIClient } from "./openaiClient.js";
 import { extractVideoId } from "./fetch/videoId.js";
@@ -7,6 +8,7 @@ import { chunkTranscript } from "./chunk/chunker.js";
 import { estimateCost } from "./cost/estimate.js";
 import { summarizeChunks } from "./map/summarizeChunks.js";
 import { consolidate } from "./reduce/consolidate.js";
+import { videoDirOrFallback } from "./outputPaths.js";
 
 const USAGE =
   "Uso: node index.js <url-do-youtube> [--skip-fetch] [--skip-map] [--skip-reduce] [--yes]";
@@ -63,6 +65,8 @@ export async function runCli(argv) {
     const segments = flags.skipFetch
       ? await readCachedTranscript(videoId)
       : await fetchTranscript(videoId);
+    const dir = await videoDirOrFallback(videoId, config);
+    console.log(`Pasta: ${dir}`);
     console.log(`Transcrição: ${segments.length} segmento(s).`);
 
     const chunks = chunkTranscript(segments, config);
@@ -92,7 +96,8 @@ export async function runCli(argv) {
   if (!flags.skipReduce) {
     console.log("Consolidando resumo final (REDUCE)...");
     await consolidate(videoId, config, client);
-    console.log(`Pronto: output/${videoId}/resumo-final.md`);
+    const dir = await videoDirOrFallback(videoId, config);
+    console.log(`Pronto: ${path.join(dir, "resumo-final.md")}`);
   } else {
     console.log("REDUCE pulado (--skip-reduce).");
   }
