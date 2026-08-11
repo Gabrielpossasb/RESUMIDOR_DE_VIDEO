@@ -12,8 +12,13 @@ Ignore conversa fiada, piadas e digressões sem conteúdo.
 Se o trecho não tiver conteúdo relevante, responda apenas: SEM CONTEÚDO RELEVANTE.
 
 O texto contém marcadores como [HH:MM:SS] indicando o timestamp aproximado
-daquele ponto da fala. Inclua o timestamp aproximado de cada ponto extraído,
-usando esses marcadores como referência.`;
+daquele ponto da fala. É OBRIGATÓRIO citar o timestamp de cada ponto extraído,
+usando o marcador mais próximo como referência. Todo item da lista deve
+terminar com o timestamp entre parênteses, neste formato:
+
+- Descrição do ponto extraído (HH:MM:SS)
+
+Nunca escreva um item sem o timestamp entre parênteses no final.`;
 
 function chunksDir(videoId, cfg) {
   return path.join(cfg.outputDir, videoId, "chunks");
