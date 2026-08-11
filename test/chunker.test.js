@@ -25,7 +25,7 @@ test("transcrição menor que o chunk gera um único chunk", () => {
   });
 
   assert.equal(chunks.length, 1);
-  assert.equal(chunks[0].text, "isso é um vídeo curto");
+  assert.equal(chunks[0].text, "[00:00:00] isso é um vídeo curto");
   assert.equal(chunks[0].startTime, 0);
   assert.equal(chunks[0].endTime, 12);
 });
@@ -40,15 +40,15 @@ test("transcrição longa gera múltiplos chunks com overlap", () => {
 
   assert.equal(chunks.length, 3);
 
-  assert.equal(chunks[0].text, "a b c d e");
+  assert.equal(chunks[0].text, "[00:00:00] a b c d e");
   assert.equal(chunks[0].startTime, 0);
   assert.equal(chunks[0].endTime, 5);
 
-  assert.equal(chunks[1].text, "d e f g h");
+  assert.equal(chunks[1].text, "[00:00:03] d e f g h");
   assert.equal(chunks[1].startTime, 3);
   assert.equal(chunks[1].endTime, 8);
 
-  assert.equal(chunks[2].text, "g h i j");
+  assert.equal(chunks[2].text, "[00:00:06] g h i j");
   assert.equal(chunks[2].startTime, 6);
   assert.equal(chunks[2].endTime, 10);
 });
@@ -62,8 +62,8 @@ test("último chunk não fica menor do que precisa por causa do fim exato", () =
   });
 
   assert.equal(chunks.length, 2);
-  assert.equal(chunks[0].text, "a b c");
-  assert.equal(chunks[1].text, "d e f");
+  assert.equal(chunks[0].text, "[00:00:00] a b c");
+  assert.equal(chunks[1].text, "[00:00:03] d e f");
 });
 
 test("overlap maior ou igual ao tamanho do chunk não trava (avança pelo menos 1 palavra)", () => {
@@ -75,7 +75,25 @@ test("overlap maior ou igual ao tamanho do chunk não trava (avança pelo menos 
   });
 
   assert.equal(chunks.length, 3);
-  assert.equal(chunks[0].text, "a b c");
-  assert.equal(chunks[1].text, "b c d");
-  assert.equal(chunks[2].text, "c d e");
+  assert.equal(chunks[0].text, "[00:00:00] a b c");
+  assert.equal(chunks[1].text, "[00:00:01] b c d");
+  assert.equal(chunks[2].text, "[00:00:02] c d e");
+});
+
+test("insere marcador de timestamp a cada 100 palavras dentro de um chunk grande", () => {
+  const words = Array.from({ length: 250 }, (_, i) => `w${i}`);
+  const segments = wordSegments(words);
+
+  const chunks = chunkTranscript(segments, {
+    chunkSizeWords: 250,
+    chunkOverlapWords: 0,
+  });
+
+  assert.equal(chunks.length, 1);
+
+  const markers = [...chunks[0].text.matchAll(/\[(\d{2}:\d{2}:\d{2})\]/g)].map(
+    (m) => m[1]
+  );
+
+  assert.deepEqual(markers, ["00:00:00", "00:01:40", "00:03:20"]);
 });

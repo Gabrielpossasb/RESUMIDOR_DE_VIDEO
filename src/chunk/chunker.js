@@ -1,3 +1,7 @@
+import { formatTimestamp } from "./timestamp.js";
+
+const MARKER_INTERVAL_WORDS = 100;
+
 function buildWordList(segments) {
   const words = [];
 
@@ -9,6 +13,22 @@ function buildWordList(segments) {
   }
 
   return words;
+}
+
+function buildChunkText(slice) {
+  const parts = [];
+  let wordsSinceMarker = MARKER_INTERVAL_WORDS;
+
+  for (const entry of slice) {
+    if (wordsSinceMarker >= MARKER_INTERVAL_WORDS) {
+      parts.push(`[${formatTimestamp(entry.startTime)}]`);
+      wordsSinceMarker = 0;
+    }
+    parts.push(entry.word);
+    wordsSinceMarker += 1;
+  }
+
+  return parts.join(" ");
 }
 
 export function chunkTranscript(segments, { chunkSizeWords, chunkOverlapWords }) {
@@ -23,7 +43,7 @@ export function chunkTranscript(segments, { chunkSizeWords, chunkOverlapWords })
     const slice = words.slice(start, end);
 
     chunks.push({
-      text: slice.map((entry) => entry.word).join(" "),
+      text: buildChunkText(slice),
       startTime: slice[0].startTime,
       endTime: slice[slice.length - 1].endTime,
     });
