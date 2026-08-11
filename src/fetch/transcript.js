@@ -70,6 +70,16 @@ async function pickCaptionSource(videoId) {
   return null;
 }
 
+export async function readCachedTranscript(videoId) {
+  const cached = await readCachedSegments(transcriptPath(videoId));
+  if (!cached) {
+    throw new Error(
+      `--skip-fetch foi usado mas não há transcrição em cache para "${videoId}" (${transcriptPath(videoId)}).`
+    );
+  }
+  return cached;
+}
+
 export async function fetchTranscript(videoId) {
   const filePath = transcriptPath(videoId);
   const dir = transcriptDir(videoId);
