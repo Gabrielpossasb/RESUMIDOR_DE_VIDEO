@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import youtubedl from "youtube-dl-exec";
 import { config } from "../config.js";
@@ -44,22 +44,30 @@ function parseJson3Captions(body) {
     .filter((segment) => segment.text !== "");
 }
 
-function pickSubtitleFile(files, videoId) {
-  const pattern = new RegExp(`^${videoId}\\.([^.]+)\\.json3$`);
-  const candidates = files
-    .map((file) => {
-      const match = file.match(pattern);
-      return match ? { file, lang: match[1] } : null;
-    })
-    .filter(Boolean);
-
-  if (candidates.length === 0) return null;
-
+function pickLanguage(availableLangs) {
   for (const lang of PREFERRED_LANGUAGES) {
-    const found = candidates.find((c) => c.lang === lang);
-    if (found) return found.file;
+    if (availableLangs.includes(lang)) return lang;
   }
-  return candidates[0].file;
+  return availableLangs[0] ?? null;
+}
+
+async function pickCaptionSource(videoId) {
+  const info = await youtubedl(`https://www.youtube.com/watch?v=${videoId}`, {
+    dumpSingleJson: true,
+    skipDownload: true,
+    noWarnings: true,
+  });
+
+  const manualLangs = Object.keys(info.subtitles ?? {});
+  const autoLangs = Object.keys(info.automatic_captions ?? {});
+
+  const manualLang = pickLanguage(manualLangs);
+  if (manualLang) return { lang: manualLang, auto: false };
+
+  const autoLang = pickLanguage(autoLangs);
+  if (autoLang) return { lang: autoLang, auto: true };
+
+  return null;
 }
 
 export async function fetchTranscript(videoId) {
@@ -69,14 +77,29 @@ export async function fetchTranscript(videoId) {
   const cached = await readCachedSegments(filePath);
   if (cached) return cached;
 
+  let source;
+  try {
+    source = await pickCaptionSource(videoId);
+  } catch (err) {
+    throw new Error(
+      `Não foi possível carregar o vídeo "${videoId}": ${err.message}`
+    );
+  }
+
+  if (!source) {
+    throw new Error(
+      `O vídeo "${videoId}" não possui transcrição/legendas disponíveis.`
+    );
+  }
+
   await mkdir(dir, { recursive: true });
 
   try {
     await youtubedl(`https://www.youtube.com/watch?v=${videoId}`, {
       skipDownload: true,
-      writeSub: true,
-      writeAutoSub: true,
-      subLangs: "all",
+      writeSub: !source.auto,
+      writeAutoSub: source.auto,
+      subLangs: source.lang,
       subFormat: "json3",
       output: path.join(dir, "%(id)s.%(ext)s"),
       noWarnings: true,
@@ -87,16 +110,7 @@ export async function fetchTranscript(videoId) {
     );
   }
 
-  const files = await readdir(dir);
-  const subtitleFile = pickSubtitleFile(files, videoId);
-
-  if (!subtitleFile) {
-    throw new Error(
-      `O vídeo "${videoId}" não possui transcrição/legendas disponíveis.`
-    );
-  }
-
-  const subtitlePath = path.join(dir, subtitleFile);
+  const subtitlePath = path.join(dir, `${videoId}.${source.lang}.json3`);
   const body = await readFile(subtitlePath, "utf8");
   const segments = parseJson3Captions(body);
   await rm(subtitlePath, { force: true });
