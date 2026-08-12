@@ -1,3 +1,5 @@
+import { REDUCE_SECTION_COUNT } from "../reduce/consolidate.js";
+
 const CHARS_PER_TOKEN = 4;
 
 function estimateTokens(text) {
@@ -13,9 +15,13 @@ export function estimateCost(chunks, cfg) {
   );
   const mapOutputTokens = Math.ceil(mapInputTokens * estimate.mapOutputRatio);
 
-  const reduceInputTokens = mapOutputTokens;
+  // REDUCE faz uma chamada por seção (ver consolidate.js), cada uma recebendo
+  // o mesmo input completo — o custo de input é multiplicado pelo número de
+  // seções. O output não é multiplicado: é a soma dos outputs das seções,
+  // calibrado a partir do total do MAP.
+  const reduceInputTokens = mapOutputTokens * REDUCE_SECTION_COUNT;
   const reduceOutputTokens = Math.ceil(
-    reduceInputTokens * estimate.reduceOutputRatio
+    mapOutputTokens * estimate.reduceOutputRatio
   );
 
   const mapCostUsd =

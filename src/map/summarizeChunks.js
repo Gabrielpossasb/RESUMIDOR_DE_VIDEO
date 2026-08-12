@@ -3,14 +3,20 @@ import path from "node:path";
 import pLimit from "p-limit";
 import { videoDirOrFallback } from "../outputPaths.js";
 
-const MAP_SYSTEM_PROMPT = `Este é um trecho de um podcast técnico. Extraia:
-1. As teses/argumentos defendidos (o que a pessoa DEFENDE, não só o que foi dito)
-2. Conceitos técnicos explicados
-3. Ferramentas, projetos, livros ou pessoas mencionados
-4. Recomendações práticas
+const MAP_SYSTEM_PROMPT = `Este é um trecho de um podcast técnico. Extraia com PROFUNDIDADE — não apenas
+o título do assunto, mas o raciocínio completo, exemplos citados, números e
+dados mencionados, e o contexto de por que a pessoa chegou àquela conclusão.
+
+1. Teses/argumentos defendidos — inclua o raciocínio, não só a conclusão
+2. Conceitos técnicos explicados — inclua a explicação como foi dada, com
+   analogias ou exemplos usados
+3. Ferramentas, projetos, livros ou pessoas mencionados — o que são e em que
+   contexto foram citados
+4. Recomendações práticas — com o "porquê" por trás, quando explicado
 
 Ignore conversa fiada, piadas e digressões sem conteúdo.
 Se o trecho não tiver conteúdo relevante, responda apenas: SEM CONTEÚDO RELEVANTE.
+Prefira manter detalhe a economizar espaço — não resuma agressivamente nesta etapa.
 
 O texto contém marcadores como [HH:MM:SS] indicando o timestamp aproximado
 daquele ponto da fala. É OBRIGATÓRIO citar o timestamp de cada ponto extraído,
@@ -20,6 +26,8 @@ terminar com o timestamp entre parênteses, neste formato:
 - Descrição do ponto extraído (HH:MM:SS)
 
 Nunca escreva um item sem o timestamp entre parênteses no final.`;
+
+const MAP_MAX_TOKENS = 2000;
 
 async function chunksDir(videoId, cfg) {
   const dir = await videoDirOrFallback(videoId, cfg);
@@ -43,6 +51,7 @@ async function readCachedResult(filePath) {
 async function callMapModel(chunk, cfg, client) {
   const response = await client.chat.completions.create({
     model: cfg.mapModel,
+    max_tokens: MAP_MAX_TOKENS,
     messages: [
       { role: "system", content: MAP_SYSTEM_PROMPT },
       { role: "user", content: chunk.text },

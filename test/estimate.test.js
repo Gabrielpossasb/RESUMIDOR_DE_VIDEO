@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { estimateCost } from "../src/cost/estimate.js";
+import { REDUCE_SECTION_COUNT } from "../src/reduce/consolidate.js";
 
 const baseCfg = {
   pricing: {
@@ -46,17 +47,21 @@ test("aplica as proporções configuradas de saída do MAP e do REDUCE", () => {
 
   assert.equal(result.mapInputTokens, 2000);
   assert.equal(result.mapOutputTokens, 1000); // 2000 * 0.5
-  assert.equal(result.reduceInputTokens, 1000); // == mapOutputTokens
-  assert.equal(result.reduceOutputTokens, 400); // 1000 * 0.4
+  // REDUCE faz uma chamada por seção, cada uma reenviando o input completo
+  assert.equal(result.reduceInputTokens, 1000 * REDUCE_SECTION_COUNT);
+  assert.equal(result.reduceOutputTokens, 400); // 1000 * 0.4 (não multiplica)
 });
 
 test("calcula custo em USD combinando tokens estimados e preços por 1M", () => {
   const chunks = [{ text: "a".repeat(4000) }, { text: "b".repeat(4000) }];
   const result = estimateCost(chunks, baseCfg);
 
+  const reduceInputTokens = 1000 * REDUCE_SECTION_COUNT;
+  const expectedReduceCost =
+    (reduceInputTokens / 1_000_000) * 100 + (400 / 1_000_000) * 200;
+
   // mapInput=2000 tokens * $10/1M = 0.02 | mapOutput=1000 * $20/1M = 0.02
   closeTo(result.mapCostUsd, 0.04);
-  // reduceInput=1000 * $100/1M = 0.1 | reduceOutput=400 * $200/1M = 0.08
-  closeTo(result.reduceCostUsd, 0.18);
-  closeTo(result.totalCostUsd, 0.22);
+  closeTo(result.reduceCostUsd, expectedReduceCost);
+  closeTo(result.totalCostUsd, 0.04 + expectedReduceCost);
 });
