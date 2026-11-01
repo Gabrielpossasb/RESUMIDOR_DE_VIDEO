@@ -1,9 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { estimateCost } from "../src/cost/estimate.js";
-import { REDUCE_SECTION_COUNT } from "../src/reduce/consolidate.js";
+import { reduceCallCount } from "../src/reduce/consolidate.js";
 
 const baseCfg = {
+  reduceMaxTopics: 8,
   pricing: {
     mapModel: { inputPer1M: 10, outputPer1M: 20 },
     reduceModel: { inputPer1M: 100, outputPer1M: 200 },
@@ -48,7 +49,7 @@ test("aplica as proporções configuradas de saída do MAP e do REDUCE", () => {
   assert.equal(result.mapInputTokens, 2000);
   assert.equal(result.mapOutputTokens, 1000); // 2000 * 0.5
   // REDUCE faz uma chamada por seção, cada uma reenviando o input completo
-  assert.equal(result.reduceInputTokens, 1000 * REDUCE_SECTION_COUNT);
+  assert.equal(result.reduceInputTokens, 1000 * reduceCallCount(baseCfg));
   assert.equal(result.reduceOutputTokens, 400); // 1000 * 0.4 (não multiplica)
 });
 
@@ -56,7 +57,7 @@ test("calcula custo em USD combinando tokens estimados e preços por 1M", () => 
   const chunks = [{ text: "a".repeat(4000) }, { text: "b".repeat(4000) }];
   const result = estimateCost(chunks, baseCfg);
 
-  const reduceInputTokens = 1000 * REDUCE_SECTION_COUNT;
+  const reduceInputTokens = 1000 * reduceCallCount(baseCfg);
   const expectedReduceCost =
     (reduceInputTokens / 1_000_000) * 100 + (400 / 1_000_000) * 200;
 

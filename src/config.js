@@ -25,6 +25,9 @@ export const config = {
 
   mapConcurrency: envInt("MAP_CONCURRENCY", 3),
 
+  // teto de tópicos do resumo final — cada tópico é uma chamada do REDUCE
+  reduceMaxTopics: envInt("REDUCE_MAX_TOPICS", 10),
+
   pricing: {
     mapModel: {
       inputPer1M: envFloat("MAP_MODEL_PRICE_INPUT_PER_1M", 0.15),
